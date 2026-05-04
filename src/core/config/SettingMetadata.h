@@ -114,6 +114,10 @@ inline constexpr SettingMeta kSettings[] = {
               L"Disable Vietnamese for listed apps",                     2207, 0, 1),
     NK_ACTION("btn-exclude-apps",     "...", "",
               nullptr, nullptr,                                          2502, 0, 1),
+    NK_TYPING("auto-off-by-url",      autoOffByUrl,
+              "Tắt TV tại thanh địa chỉ trình duyệt", "Auto-off on address bar",
+              L"Tự động tắt tiếng Việt khi nhập địa chỉ trình duyệt (Chrome, Edge...)",
+              L"Automatically disable Vietnamese when typing in browser address bars", 2221, 0, 1),
     // ── Action buttons (grouped at bottom) ──
     NK_ACTION("btn-app-overrides",    "Cấu hình từng ứng dụng", "Per-app config",
               nullptr, nullptr,                                          2500, 0, 1),

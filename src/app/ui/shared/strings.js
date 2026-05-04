@@ -42,6 +42,7 @@ var STRINGS = {
         // Tab 1: Input
         "s.modern_ortho": "Place diacritics: o\u00E0, u\u00FD (not \u00F2a, \u00FAy)",
         "s.auto_caps": "Auto-capitalize first letter",
+        "s.auto_off_by_url": "Auto-disable in web browser URL bar",
         "s.allow_zwjf": "Allow \"z w j f\" as initial consonants",
         "s.allow_zwjf_tooltip": "Allowed by default. Only needed when spell check is on",
         "s.spell_check": "Spell check",

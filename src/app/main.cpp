@@ -349,7 +349,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int) {
 #ifdef NEXUSKEY_HOOK_ENGINE
     // ═══════════════════════════════════════════════════════════
     // Hook Engine Mode — single process, no DLL/COM needed
+    // (Except for UIAutomation which requires COM initialization)
     // ═══════════════════════════════════════════════════════════
+    
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
     bool startVietnamese = (systemConfig.startupMode != 1);
 
@@ -549,6 +552,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int) {
     g_hotkeyManager.Uninstall();
     g_hookEngine.Stop();
     timeEndPeriod(1);
+    CoUninitialize();
 
 #else
     // ═══════════════════════════════════════════════════════════

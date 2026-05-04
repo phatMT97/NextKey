@@ -622,6 +622,9 @@ void SettingsDialog::handleToggleChange(const std::wstring& id, bool value) {
     else if (id == L"auto-caps") {
         config_.autoCaps = value;
     }
+    else if (id == L"auto-off-by-url") {
+        config_.autoOffByUrl = value;
+    }
     else if (id == L"allow-zwjf") {
         config_.allowZwjf = value;
     }
@@ -1011,6 +1014,7 @@ void SettingsDialog::initializeUI() {
     call_function("updateSpellCheckChildren", sciter::value(config_.spellCheckEnabled));
     setToggleState(L"modern-ortho", config_.modernOrtho);
     setToggleState(L"auto-caps", config_.autoCaps);
+    setToggleState(L"auto-off-by-url", config_.autoOffByUrl);
     setToggleState(L"allow-zwjf", config_.allowZwjf);
     setToggleState(L"restore-key", config_.autoRestoreEnabled);
     setToggleState(L"allow-english-bypass", config_.allowEnglishBypass);

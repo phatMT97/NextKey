@@ -67,6 +67,7 @@ struct TypingConfig {
     bool quickEndConsonant = false;    // Quick end consonant: g→ng, h→nh, k→ch
     bool tempOffMacroByEsc = false;    // Esc temporarily disables macro for next word
     bool autoCapsMacro = false;        // Auto-capitalize expansion to match typed case
+    bool autoOffByUrl = false;         // Auto-disable Vietnamese on browser address bars
     bool allowEnglishBypass = false;   // Cho phép gõ dấu tự do / Bypass English blocking (e.g. yes -> ýe)
     bool macroTriggerSpace = true;     // Kích hoạt bằng phím Space
     bool macroTriggerEnter = true;     // Kích hoạt bằng phím Enter

@@ -151,6 +151,7 @@ std::optional<TypingConfig> ConfigManager::LoadFromFile(const std::wstring& path
             config.quickEndConsonant = (*features)["quick_end_consonant"].value_or(false);
             config.tempOffMacroByEsc = (*features)["temp_off_macro_esc"].value_or(false);
             config.autoCapsMacro = (*features)["auto_caps_macro"].value_or(false);
+            config.autoOffByUrl = (*features)["auto_off_by_url"].value_or(false);
             config.allowEnglishBypass = (*features)["allow_english_bypass"].value_or(false);
             config.macroTriggerSpace = (*features)["macro_trigger_space"].value_or(true);
             config.macroTriggerEnter = (*features)["macro_trigger_enter"].value_or(true);
@@ -214,6 +215,7 @@ bool ConfigManager::SaveToFile(const std::wstring& path, const TypingConfig& con
         features.insert_or_assign("quick_end_consonant", config.quickEndConsonant);
         features.insert_or_assign("temp_off_macro_esc", config.tempOffMacroByEsc);
         features.insert_or_assign("auto_caps_macro", config.autoCapsMacro);
+        features.insert_or_assign("auto_off_by_url", config.autoOffByUrl);
         features.insert_or_assign("allow_english_bypass", config.allowEnglishBypass);
         features.insert_or_assign("macro_trigger_space", config.macroTriggerSpace);
         features.insert_or_assign("macro_trigger_enter", config.macroTriggerEnter);

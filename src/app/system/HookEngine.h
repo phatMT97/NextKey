@@ -23,6 +23,8 @@
 #include <unordered_set>
 #include <vector>
 
+struct IUIAutomation;
+
 namespace NextKey {
 
 class SharedStateManager;  // Forward declaration (defined in core/ipc/SharedStateManager.h)
@@ -102,6 +104,7 @@ private:
                                        DWORD dwEventThread, DWORD dwmsEventTime);
     static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam);
     static void CALLBACK FocusPollTimerProc(HWND, UINT, UINT_PTR, DWORD);
+    static void CALLBACK DelayedUrlCheckTimerProc(HWND, UINT, UINT_PTR, DWORD);
 
     // Config application (shared between Start and CheckConfigEvent)
     void ApplyConfig(const TypingConfig& config);
@@ -168,8 +171,10 @@ private:
     // REQUIRES: stateMutex_ held by caller.
     [[nodiscard]] bool IsWebView2App(HWND topLevel, const std::wstring& exeFullPath) noexcept;
     void NotifyModeChange() noexcept;  // Fire modeChangeCallback_ with effective mode
+    void ClearUrlSuppression() noexcept;
     bool VerifyExcludedState();        // Check if foreground is still excluded; clears stale flag if not
     void OnFocusChanged(HWND triggerHwnd = nullptr);
+    void CheckUrlBarFocus(HWND activeHwnd);
     // Populate cachedFocusedHwnd_/cachedFocusedClass_ from `foreground` via AttachThreadInput.
     // Called from OnFocusChanged and on-demand from TryEditMessagePaste when cache is stale.
     void RefreshFocusCache(HWND foreground) noexcept;
@@ -203,6 +208,7 @@ private:
     bool tsfApps_ = false;
     bool autoCaps_ = false;
     bool autoCapsMacro_ = false;
+    bool autoOffByUrl_ = false;
     bool tempOffByAlt_ = false;
     bool tempEngineOff_ = false;       // True = Vietnamese bypassed for current word
     int altTapCount_ = 0;              // 0 or 1 (waiting for second tap)
@@ -222,6 +228,8 @@ private:
     bool isTsfApp_ = false;       // cached: is current foreground app in TSF list?
     bool isConsoleApp_ = false;   // cached: is current foreground app a console emulator?
     bool isElectronApp_ = false;  // cached: Electron/Qt but NOT console (skipEmptyChar_ && !isConsoleApp_)
+    bool urlSuppressed_ = false;  // True when currently suppressed by browser URL bar
+    bool modeBeforeUrl_ = true;   // Saved mode before URL bar suppression
     std::unordered_set<std::wstring> webView2PositiveCache_;  // full exe path → known WebView2 host (positive-only; see IsWebView2App)
     bool skipEmptyChar_ = false;  // Skip U+202F for Qt/Electron and Console apps
     bool needBaitChar_ = false;   // Apps with autocomplete/suggest need U+202F bait before BS
@@ -286,7 +294,10 @@ private:
     HHOOK mouseHook_ = nullptr;
     HWINEVENTHOOK focusHook_ = nullptr;     // EVENT_SYSTEM_FOREGROUND
     HWINEVENTHOOK minimizeHook_ = nullptr;  // EVENT_SYSTEM_MINIMIZEEND
+    HWINEVENTHOOK objectFocusHook_ = nullptr; // EVENT_OBJECT_FOCUS
     UINT_PTR focusPollTimer_ = 0;          // 200ms PID poll — catches missed/phantom focus events
+    UINT_PTR urlFocusTimer_ = 0;           // 100ms URL focus re-eval — fixes Chromium UIA tree lag
+    IUIAutomation* uia_ = nullptr;         // UIAutomation for address bar detection
 
     // Dedicated hook thread: owns keyboardHook_ + mouseHook_ and runs its own
     // GetMessage pump so LL hook callbacks never block on the main (UI) thread's
