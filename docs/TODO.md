@@ -1,13 +1,17 @@
 # TODO
 
-## 🟡 Vietnamese-rule consolidation into a unified phonology core (2026-05-08)
+## 🔴 Vietnamese-rule consolidation into a phonology plugin (2026-05-08)
+
+**Project design philosophy (anh 2026-05-08):** *nhanh - gọn - nhẹ - mượt - plugin,
+**không code phân mảnh***. The current Vietnamese-rule spread directly violates the
+last clause — this is now a **principle-grade** consolidation, not deferred polish.
 
 **Surfaced during T2 + T3 review (`Phonotactics::IsValidSyllable` interface contract closure).**
 Rule logic for "is this Vietnamese?" / "is this syllable valid?" / "where does the
 tone go?" / "is this English masquerading as Vietnamese?" is currently scattered
-across 5+ files with overlapping/duplicate concepts. Want a single canonical
-phonology module (or plugin in the project's plugin architecture style) that
-all callers consume.
+across 5+ files with overlapping/duplicate concepts. Goal: a single canonical
+**phonology plugin** (matching the project's existing `IOutputInjector` /
+`CodeTableConverter` plugin patterns) that all callers consume.
 
 ### Current spread
 
@@ -25,33 +29,59 @@ all callers consume.
 - **T2.1 (extended)**: per-nucleus allowed-coda — Path 2 N1/N2/N3 (T3, coarse) + Path 1 `kVCPairRules` bitmask (granular, stricter). Path 2 is approximation of Path 1.
 - **English-coda heuristic** in `EnglishProtection.h` reuses the `(c/m/n/p/t)` coda lexicon a third time, for the orthogonal "is this English?" axis.
 
-### Proposed direction (when picked up)
+### Proposed direction (plugin shape)
 
-1. Lift the **rule data tables** to a shared header (`VietnameseTables.h` or new `VietnamesePhonologyData.h`):
-   - Onset lexicon + agreement matrix
-   - VCPair bitmask (single source of truth for per-nucleus allowed codas)
-   - Closed/pending vowel sets
+Frame the consolidation as `IPhonologyRules` plugin contract — same architectural
+pattern as `IOutputInjector` (`OutputInjectorFactory::Create`) and
+`ICodeTableConverter`. One source of truth for the Vietnamese rule data,
+adapters thin enough to be obvious wrappers.
+
+1. **Single rule-data header** (`core/engine/VietnamesePhonologyData.h`, or
+   extend `VietnameseTables.h`):
+   - Onset lexicon + onset/vowel agreement matrix (today: 2 places)
+   - **VCPair bitmask** as single source of truth for per-nucleus allowed
+     codas (today: PhonotacticsValidator only — Path 2 gets a coarser
+     N1/N2/N3 approximation in T3, must be replaced by VCPair lookup)
+   - Closed/pending vowel sets (today: only Path 2)
    - Tone-position diphthong tables (already centralized — use as model)
-2. Keep the **two adapter layers** (CharState vs wstring_view) since they serve
-   different I/O contracts, but make both consume the shared tables.
-3. Optional plugin angle: if NexusKey grows a "rule-pack per dialect / locale"
-   mechanism, the shared tables become the plugin contract.
+2. **Plugin contract** (`IPhonologyRules`) exposing typed queries:
+   `OnsetClass(view) → enum`, `AllowedCodaMask(nucleusKey) → uint16_t`,
+   `TonePosition(view, coda, ortho) → size_t`, etc. The two existing
+   `IPhonotactics` impls become thin adapters over this contract.
+3. **Adapter layers**:
+   - CharState path: `PhonotacticsValidator` calls into `IPhonologyRules`
+     using its packed-key encoding for fast lookup (preserve hot-path cost).
+   - wstring_view path: `Phonotactics` (Path 2) calls the same contract,
+     paying a small render→key conversion cost (off hot path).
+   - English-bias detection (`EnglishProtection.h`) consumes the same
+     onset/coda lexicons rather than re-encoding `c/m/n/p/t` a third time.
+4. **Plugin angle (future-proof)**: when NexusKey grows rule-pack-per-dialect
+   or rule-pack-per-script, `IPhonologyRules` becomes the swap-point. The
+   factory accepts a `RulePackId` (default: standard Vietnamese), opening
+   the door for dialectal variants without forking validator code.
 
 ### Effort estimate
 
-1-2 days. Touches both validators + adds tests. Risk: chaos regressions on Path 1
-hot path if VCPair table ever changes during the lift — keep table contents
-byte-identical, only relocate.
+2-3 days. Includes:
+- Rule-data header extraction (1 day)
+- `IPhonologyRules` contract + adapter rewrites (1 day, both validators
+  must stay byte-identical on chaos.toml)
+- English-protection consumer reuse (0.5 day, optional first pass)
+- Tests + chaos verification (0.5 day)
 
-### Why now / why later
+Risk: chaos regressions on Path 1 hot path if VCPair table or onset
+agreement contents drift during the lift — discipline = preserve rule
+contents byte-for-byte, only relocate and re-export.
 
-Now: T2/T3 surfaced the duplication in two consecutive PRs; the cost of fixing
-during the rule-touching window is lower than fixing it cold.
+### Sequencing
 
-Later: Path 1 ships the actual production check today and is correct; Path 2
-has no production caller. There's no behaviour bug to chase, so this is pure
-maintainability work. Schedule alongside the next phonology-touching feature
-(spell-check overlay, dictionary, etc.).
+**Per design philosophy this should land BEFORE the next phonology-touching
+feature** (spell-check overlay, dictionary lookup, dialect rule-packs). Doing
+it cold de-risks future feature work; doing it during a feature ships
+risk-on-risk.
+
+Suggested entry point after T6 closure: a `phonology-plugin` sprint mirroring
+the Sprint 2 D0–D6 cadence used for `IOutputInjector`.
 
 ---
 
