@@ -168,6 +168,82 @@ constexpr std::wstring_view kValidCodas[] = {
     return false;
 }
 
+// Coda groups (RuleTiengViet):
+//   C1 = ng, c       (velar)
+//   C2 = nh, ch      (palatal)
+//   C3 = m, n, p, t  (labial / alveolar)
+enum class CodaGroup : uint8_t { None, C1, C2, C3 };
+
+[[nodiscard]] CodaGroup ClassifyCoda(std::wstring_view coda) noexcept {
+    if (coda.empty()) return CodaGroup::None;
+    if (coda == L"ng" || coda == L"c") return CodaGroup::C1;
+    if (coda == L"nh" || coda == L"ch") return CodaGroup::C2;
+    if (coda == L"m" || coda == L"n" || coda == L"p" || coda == L"t") return CodaGroup::C3;
+    return CodaGroup::None;  // unknown coda — let other rules reject if needed
+}
+
+// Vowel groups for vowel-coda compatibility (RuleTiengViet):
+//   N1 nuclei accept C1 + C3, reject C2
+//   N2 nuclei accept C2 + C3, reject C1
+//   N3 nuclei accept everything
+//   Other = nucleus not classified — lenient fall-through (allow any coda)
+//
+// Coarser than the per-nucleus `kVCPairRules` bitmask in PhonotacticsValidator.cpp,
+// which is the source-of-truth for the production CharState path. Examples of
+// where VCPair is stricter: "ơ" (only m/n/p/t — N-group says C1+C3 = also ng/c),
+// "iê" (no ch/nh — N-group says all). If/when Phonotactics::IsValidSyllable
+// gains a production caller, port the VCPair encoding rather than relying on
+// the N-group approximation here. See REFACTOR_STATUS T2.1.
+enum class VowelGroup : uint8_t { Other, N1, N2, N3 };
+
+constexpr std::wstring_view kN1Nuclei[] = {
+    L"\x00E2",                 // â
+    L"e",
+    L"o",
+    L"\x00F4",                 // ô
+    L"u",
+    L"\x01B0",                 // ư
+    L"\x01A1",                 // ơ
+    L"\x0103",                 // ă
+    L"o\x0103",                // oă
+    L"oe",
+    L"u\x00E2",                // uâ
+    L"u\x00F4",                // uô
+    L"u\x01A1",                // uơ
+    L"\x01B0\x01A1",           // ươ
+};
+
+constexpr std::wstring_view kN2Nuclei[] = {
+    L"\x00EA",                 // ê
+    L"i",
+    L"u\x00EA",                // uê
+    L"uy",
+    L"ua",
+};
+
+constexpr std::wstring_view kN3Nuclei[] = {
+    L"a",
+    L"oa",
+    L"i\x00EA",                // iê
+    L"uy\x00EA",               // uyê
+};
+
+[[nodiscard]] VowelGroup ClassifyVowelGroup(std::wstring_view vowelSeq) noexcept {
+    for (auto v : kN1Nuclei) if (v == vowelSeq) return VowelGroup::N1;
+    for (auto v : kN2Nuclei) if (v == vowelSeq) return VowelGroup::N2;
+    for (auto v : kN3Nuclei) if (v == vowelSeq) return VowelGroup::N3;
+    return VowelGroup::Other;
+}
+
+[[nodiscard]] bool IsCodaCompatibleWithVowelGroup(VowelGroup group, CodaGroup codaGroup) noexcept {
+    if (group == VowelGroup::Other)  return true;   // unclassified — lenient
+    if (codaGroup == CodaGroup::None) return true;
+    if (codaGroup == CodaGroup::C3)  return true;   // C3 accepted by all groups
+    if (group == VowelGroup::N3)     return true;   // N3 accepts everything
+    if (group == VowelGroup::N1)     return codaGroup == CodaGroup::C1;
+    return codaGroup == CodaGroup::C2;              // group == N2
+}
+
 // Vietnamese orthography splits c/k, g/gh, ng/ngh by vowel frontness.
 // Mirror of the rule encoded against CharState in PhonotacticsValidator.cpp;
 // the two paths differ in input type (rendered text vs engine state) so the
@@ -377,6 +453,11 @@ bool Phonotactics::IsValidSyllable(
 
     // Pending vowels MUST have a coda.
     if (coda.empty() && IsPendingVowelSeq(vowelSeq)) return false;
+
+    // N1/N2/N3 vowel-coda group compatibility.
+    if (!IsCodaCompatibleWithVowelGroup(ClassifyVowelGroup(vowelSeq), ClassifyCoda(coda))) {
+        return false;
+    }
 
     // Stop-final coda restricts tone to Acute or Dot.
     if (!ToneAllowedForCoda(coda, tone)) return false;
