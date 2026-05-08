@@ -1,5 +1,60 @@
 # TODO
 
+## 🟡 Vietnamese-rule consolidation into a unified phonology core (2026-05-08)
+
+**Surfaced during T2 + T3 review (`Phonotactics::IsValidSyllable` interface contract closure).**
+Rule logic for "is this Vietnamese?" / "is this syllable valid?" / "where does the
+tone go?" / "is this English masquerading as Vietnamese?" is currently scattered
+across 5+ files with overlapping/duplicate concepts. Want a single canonical
+phonology module (or plugin in the project's plugin architecture style) that
+all callers consume.
+
+### Current spread
+
+| File | Concern | Granularity |
+|---|---|---|
+| `core/engine/Phonotactics.cpp` (Path 2 / wstring_view) | `IsValidSyllable`, `TonePosition`, `CanComplete`. Now contains: T2 onset agreement (c/k/g/gh/ng/ngh), T3 N1/N2/N3 vowel-coda groups | wstring_view I/O, coarse |
+| `core/engine/PhonotacticsValidator.cpp` (Path 1 / CharState) | `ValidateSyllableState`, `kVCPairRules` per-nucleus allowed-coda bitmask, onset agreement (c/k/gh/ngh), gi/qu dual decomposition | CharState I/O, **stricter / per-nucleus** |
+| `core/engine/EnglishProtection.h` | `IsHardEnglishStart/End`, `IsInvalidVietnameseCoda`, `IsHardEnglishToneContext` (V+C+V) | states[] I/O, English bias detection |
+| `core/engine/EngineHelpers.h` | Vowel/consonant scan helpers, `FindStrokeDTarget`, edge-case prefix detection | states[] I/O, modifier targeting |
+| `core/engine/VietnameseTables.h` | `kDiphthongClassic` / `kDiphthongModern`, `IsTriphthong`, `DiphthongVowelIndex` | base-char I/O, tone-position tables |
+
+### Concrete duplications already logged
+
+- **T2.1 (REFACTOR_STATUS)**: onset agreement encoded twice — Path 2 wstring_view (T2) + Path 1 CharState (PV:684-715). Same rule, different input types.
+- **T2.1 (extended)**: per-nucleus allowed-coda — Path 2 N1/N2/N3 (T3, coarse) + Path 1 `kVCPairRules` bitmask (granular, stricter). Path 2 is approximation of Path 1.
+- **English-coda heuristic** in `EnglishProtection.h` reuses the `(c/m/n/p/t)` coda lexicon a third time, for the orthogonal "is this English?" axis.
+
+### Proposed direction (when picked up)
+
+1. Lift the **rule data tables** to a shared header (`VietnameseTables.h` or new `VietnamesePhonologyData.h`):
+   - Onset lexicon + agreement matrix
+   - VCPair bitmask (single source of truth for per-nucleus allowed codas)
+   - Closed/pending vowel sets
+   - Tone-position diphthong tables (already centralized — use as model)
+2. Keep the **two adapter layers** (CharState vs wstring_view) since they serve
+   different I/O contracts, but make both consume the shared tables.
+3. Optional plugin angle: if NexusKey grows a "rule-pack per dialect / locale"
+   mechanism, the shared tables become the plugin contract.
+
+### Effort estimate
+
+1-2 days. Touches both validators + adds tests. Risk: chaos regressions on Path 1
+hot path if VCPair table ever changes during the lift — keep table contents
+byte-identical, only relocate.
+
+### Why now / why later
+
+Now: T2/T3 surfaced the duplication in two consecutive PRs; the cost of fixing
+during the rule-touching window is lower than fixing it cold.
+
+Later: Path 1 ships the actual production check today and is correct; Path 2
+has no production caller. There's no behaviour bug to chase, so this is pure
+maintainability work. Schedule alongside the next phonology-touching feature
+(spell-check overlay, dictionary, etc.).
+
+---
+
 ## ✅ ChannelTraits cleanup landed (2026-05-05)
 
 Both `isElectronApp_` and `needBaitChar_` atomic flags moved from
